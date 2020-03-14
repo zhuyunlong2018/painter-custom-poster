@@ -1,19 +1,18 @@
 import React from 'react';
-import fabric from 'fabric';
 import _ from 'lodash';
 import { message } from 'antd';
 import keydown, { ALL_KEYS } from 'react-keydown';
 import { newOptionArr } from './optionArr';
 import './App.scss';
+import CanvasSprite from './CanvasSprite'
 import Example from './components/Example'
 import CodeActions from './components/CodeActions'
 import Options from './components/Options'
 import Element from './components/Element'
-import { addTextObject, addRectObject, addImageObject, addQrcodeObject } from './AddShape'
+import { addTextObject, addRectObject, addImageObject, addQrcodeObject, changeObjectValue } from './AddShape'
 //import importCodeJson from './importCodeJson';
 //var FontFaceObserver = require('fontfaceobserver');
 
-fabric = fabric.fabric;
 message.config({
   maxCount: 1
 });
@@ -26,6 +25,11 @@ let _config = {
   undoFinishedStatus: 1,
   redoFinishedStatus: 1
 };
+
+/**
+ * 存储avansSprite单例
+ */
+let canvasSprite;
 
 class App extends React.Component {
   constructor(props) {
@@ -51,120 +55,39 @@ class App extends React.Component {
   }
 
   componentDidMount() {
-    this.canvas_sprite = new fabric.Canvas('merge', {
+    this.initCanvansSprite()
+
+  }
+
+  initCanvansSprite() {
+    //获取canvas实例
+    canvasSprite = CanvasSprite.getInstances({
       ...this.state.currentOptionArr[0].css,
       backgroundColor: this.state.currentOptionArr[0].css.background
-    });
-    /* var font = new FontFaceObserver('webfont');
-    font.load(); */
-    //this.confirmImportCode();
-    this.addEventListener();
-    /* this.addShape(1);
-    this.addShape(2);
-    this.addShape(3);
-    this.addShape(4); */
-    /* let canvas = this.canvas_sprite;
-    canvas.add(new fabric.Circle({ radius: 30, fill: '#f55', top: 100, left: 100 })); */
-    /* let rect = new fabric.Rect({
-      width: 200,
-      height: 100,
-      left: 0,
-      top: 0,
-      fill: '#000'
-    });
-    let background = 'linear-gradient(280deg, #fedcba 0%, rgba(18, 52, 86, 1) 20%, #987 80%)';
-    this.canvas_sprite.add(rect);
-    let gradientOption = '';
-    if (GD.api.isGradient(background)) {
-      gradientOption = GD.api.doGradient(background, 200, 100);
-    }
+    })
+    //赋值
+    this.canvas_sprite = canvasSprite.canvas_sprite
 
-    rect.setGradient('fill', gradientOption); */
-  }
-  addEventListener() {
-    let that = this;
-    let throttlechangeActiveObjectValue = _.throttle(that.changeActiveObjectValue, 100);
-    this.canvas_sprite.on('object:moving', function (e) {
-      var obj = e.target;
-      // if object is too big ignore
-      if (obj.currentHeight > obj.canvas.height || obj.currentWidth > obj.canvas.width) {
-        return;
-      }
-      obj.setCoords();
-      // top-left  corner
-      if (obj.getBoundingRect().top < 0 || obj.getBoundingRect().left < 0) {
-        obj.top = Math.max(obj.top, obj.top - obj.getBoundingRect().top);
-        obj.left = Math.max(obj.left, obj.left - obj.getBoundingRect().left);
-      }
-      // bot-right corner
-      if (
-        obj.getBoundingRect().top + obj.getBoundingRect().height > obj.canvas.height ||
-        obj.getBoundingRect().left + obj.getBoundingRect().width > obj.canvas.width
-      ) {
-        obj.top = Math.min(
-          obj.top,
-          obj.canvas.height - obj.getBoundingRect().height + obj.top - obj.getBoundingRect().top
-        );
-        obj.left = Math.min(
-          obj.left,
-          obj.canvas.width - obj.getBoundingRect().width + obj.left - obj.getBoundingRect().left
-        );
-      }
-
-      throttlechangeActiveObjectValue();
-    });
-    this.canvas_sprite.on('object:scaling', function (e) {
-      var obj = e.target;
-      // if object is too big ignore
-      if (obj.currentHeight > obj.canvas.height || obj.currentWidth > obj.canvas.width) {
-        return;
-      }
-      obj.setCoords();
-      // top-left  corner
-      if (obj.getBoundingRect().top < 0 || obj.getBoundingRect().left < 0) {
-        obj.top = Math.max(obj.top, obj.top - obj.getBoundingRect().top);
-        obj.left = Math.max(obj.left, obj.left - obj.getBoundingRect().left);
-      }
-      // bot-right corner
-      if (
-        obj.getBoundingRect().top + obj.getBoundingRect().height > obj.canvas.height ||
-        obj.getBoundingRect().left + obj.getBoundingRect().width > obj.canvas.width
-      ) {
-        obj.top = Math.min(
-          obj.top,
-          obj.canvas.height - obj.getBoundingRect().height + obj.top - obj.getBoundingRect().top
-        );
-        obj.left = Math.min(
-          obj.left,
-          obj.canvas.width - obj.getBoundingRect().width + obj.left - obj.getBoundingRect().left
-        );
-      }
-      throttlechangeActiveObjectValue();
-    });
-    this.canvas_sprite.on('mouse:down', function (e) {
-      if (e.target) {
-        that.activeObject = e.target;
-        that.changeActiveObjectValue();
+    const throttleChangeActiveObjectValue = _.throttle(this.changeActiveObjectValue, 100);
+    //添加监听
+    canvasSprite.onMoving(throttleChangeActiveObjectValue)
+    canvasSprite.onScaling(throttleChangeActiveObjectValue)
+    canvasSprite.onDown((value) => {
+      if (value) {
+        this.activeObject = value
+        this.changeActiveObjectValue()
       } else {
-        that.setState({
+        this.setState({
           visible: false
         });
       }
-    });
-    //解决放大缩小元素位置不对的问题
-    this.canvas_sprite.on('object:scaled', function (e) {
-      if (e.target) {
-        that.activeObject = e.target;
-        that.updateObject();
-      }
-    });
-    this.canvas_sprite.on('object:modified', function () {
-      that.updateCanvasState();
-    });
-
-    this.canvas_sprite.on('object:added', function () {
-      that.updateCanvasState();
-    });
+    })
+    canvasSprite.onScaled(() => {
+      this.updateCanvasState();
+    })
+    canvasSprite.onAdded(() => {
+      this.updateCanvasState();
+    })
   }
 
   @keydown(/* ['ctrl+left', 'ctrl+right', 'ctrl+up', 'ctrl+down', 'ctrl+z', 'ctrl+y', 'delete', '[', ']'] */ ALL_KEYS)
@@ -300,111 +223,8 @@ class App extends React.Component {
     this.setState({
       visible: true
     });
-    let item2 = this.activeObject;
-    let width = `${(item2.width - item2.strokeWidth) * item2.scaleX}`;
-    let height = `${(item2.height - item2.strokeWidth) * item2.scaleY}`;
-    /* let left = `${(item2.left / item2.scaleY - (item2.width - item2.strokeWidth) / 2 - item2.strokeWidth).toFixed(2)}`;
-    let top = `${(item2.top / item2.scaleY - (item2.height - item2.strokeWidth) / 2 - item2.strokeWidth).toFixed(2)}`; */
-    let left = `${(item2.left - width / 2).toFixed(2)}`;
-    let top = `${(item2.top - height / 2).toFixed(2)}`;
-    //console.log('item2.strokeWidth', `${item2.shadow}`, item2.scaleY);
-    let css = {
-      width,
-      height,
-      left,
-      top,
-      color: `${item2.color}`,
-      background: `${item2.fill}`,
-      rotate: `${item2.angle}`,
-      borderRadius: `${item2.rx * item2.scaleY}`,
-      borderWidth: `${item2.strokeWidth * item2.scaleY}`,
-      borderColor: `${item2.stroke}`,
-      shadow: `${item2.myshadow}`
-    };
-    let index = '';
-    switch (type) {
-      case 'textGroup':
-        index = 1;
-        item2._objects.forEach(ele => {
-          let css2 = {
-            text: '',
-            width,
-            maxLines: ``,
-            lineHeight: '',
-            left,
-            top,
-            color: `${item2.color}`,
-            background: `${item2.fill}`,
-            fontSize: '',
-            fontWeight: '',
-            textDecoration: '',
-            rotate: `${item2.angle}`,
-            //padding: 0,
-            borderRadius: `${item2.rx * item2.scaleY}`,
-            borderWidth: `${item2.strokeWidth * item2.scaleY}`,
-            borderColor: `${item2.stroke}`,
-            shadow: `${item2.shadow}`,
-            textStyle: '',
-            textAlign: '',
-            fontFamily: ''
-          };
-          if (ele.type === 'rect') {
-          } else {
-            css = {
-              ...css2,
-              text: `${item2.oldText}`,
-              maxLines: `${ele.maxLines}`,
-              lineHeight: `${ele.lineHeight}`,
-              color: ele.fill,
-              //padding: `${ele.padding}`,
-              fontSize: `${ele.fontSize}`,
-              fontWeight: `${ele.fontWeight}`,
-              textStyle: `${ele.textStyle}`,
-              textDecoration: `${ele.textDecoration === 'linethrough' ? 'line-through' : ele.textDecoration}`,
-              fontFamily: `${ele.fontFamily}`,
-              textAlign: `${ele.textAlign}`,
-              shadow: `${item2.myshadow}`
-            };
-          }
-        });
-        break;
-      case 'rect':
-        index = 2;
-        delete css.color;
-        css = {
-          ...css,
-          shadow: `${item2.myshadow}`
-        };
-        break;
-      case 'image':
-        index = 3;
-        delete css.color;
-        delete css.background;
-        css = {
-          url: item2.url,
-          ...css,
-          mode: `${item2.mode}`,
-          shadow: `${item2.myshadow}`
-        };
-        break;
-      case 'qrcode':
-        index = 4;
-        delete css.height;
-        delete css.borderWidth;
-        delete css.borderColor;
-        delete css.shadow;
-        css = {
-          url: item2.url,
-          ...css,
-          color: item2.color,
-          background: item2.background
-        };
-        break;
-      default:
-        break;
-    }
+    const { index , css } = changeObjectValue(this.activeObject, type)
     let currentOptionArr = _.cloneDeep(this.state.currentOptionArr);
-    //console.log('currentOptionArr', currentOptionArr[index].css);
     currentOptionArr[index].css = css;
     this.setState({
       currentOptionArr
@@ -452,6 +272,7 @@ class App extends React.Component {
       });
     });
   }
+
   updateCanvasState() {
     let that = this;
     let canvas_sprite = this.canvas_sprite;
@@ -474,6 +295,7 @@ class App extends React.Component {
       }
     }
   }
+
   handerUndo() {
     let that = this;
     let canvas_sprite = this.canvas_sprite;
@@ -615,11 +437,11 @@ class App extends React.Component {
             this.canvas_sprite.renderAll();
           }}
         >
-          <CodeActions canvas_sprite={this.canvas_sprite}
+          <CodeActions
             currentOptionArr={this.currentOptionArr}
             confirmImportCode={this.confirmImportCode.bind(this)}
           />
-          <Options 
+          <Options
             currentOptionArr={this.currentOptionArr}
             addShape={this.addShape.bind(this)}
             updateThisCurrentOptionArr={this.updateThisCurrentOptionArr.bind(this)}

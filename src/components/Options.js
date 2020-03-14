@@ -2,7 +2,7 @@ import React from 'react';
 import _ from 'lodash';
 import { optionArr } from '../optionArr';
 import { Button, Input, Select, Radio } from 'antd';
-
+import CanvasSprite from '../CanvasSprite'
 
 const { Option } = Select;
 const { TextArea } = Input;

@@ -1,4 +1,6 @@
-import { fabric } from 'fabric';
+import {
+  fabric
+} from 'fabric';
 import jrQrcode from 'jr-qrcode';
 
 const GD = require('./gradient.js');
@@ -499,4 +501,116 @@ export const addQrcodeObject = async css => {
     };
   })(Shape.toObject);
   return Shape;
+}
+
+/**
+ * 修改图形对象到值
+ * @param {*} item2 
+ */
+export const changeObjectValue = (item2, type) => {
+  let width = `${(item2.width - item2.strokeWidth) * item2.scaleX}`;
+  let height = `${(item2.height - item2.strokeWidth) * item2.scaleY}`;
+  /* let left = `${(item2.left / item2.scaleY - (item2.width - item2.strokeWidth) / 2 - item2.strokeWidth).toFixed(2)}`;
+  let top = `${(item2.top / item2.scaleY - (item2.height - item2.strokeWidth) / 2 - item2.strokeWidth).toFixed(2)}`; */
+  let left = `${(item2.left - width / 2).toFixed(2)}`;
+  let top = `${(item2.top - height / 2).toFixed(2)}`;
+  //console.log('item2.strokeWidth', `${item2.shadow}`, item2.scaleY);
+  let css = {
+    width,
+    height,
+    left,
+    top,
+    color: `${item2.color}`,
+    background: `${item2.fill}`,
+    rotate: `${item2.angle}`,
+    borderRadius: `${item2.rx * item2.scaleY}`,
+    borderWidth: `${item2.strokeWidth * item2.scaleY}`,
+    borderColor: `${item2.stroke}`,
+    shadow: `${item2.myshadow}`
+  };
+  let index = '';
+  switch (type) {
+    case 'textGroup':
+      index = 1;
+      item2._objects.forEach(ele => {
+        let css2 = {
+          text: '',
+          width,
+          maxLines: ``,
+          lineHeight: '',
+          left,
+          top,
+          color: `${item2.color}`,
+          background: `${item2.fill}`,
+          fontSize: '',
+          fontWeight: '',
+          textDecoration: '',
+          rotate: `${item2.angle}`,
+          //padding: 0,
+          borderRadius: `${item2.rx * item2.scaleY}`,
+          borderWidth: `${item2.strokeWidth * item2.scaleY}`,
+          borderColor: `${item2.stroke}`,
+          shadow: `${item2.shadow}`,
+          textStyle: '',
+          textAlign: '',
+          fontFamily: ''
+        };
+        if (ele.type === 'rect') { } else {
+          css = {
+            ...css2,
+            text: `${item2.oldText}`,
+            maxLines: `${ele.maxLines}`,
+            lineHeight: `${ele.lineHeight}`,
+            color: ele.fill,
+            //padding: `${ele.padding}`,
+            fontSize: `${ele.fontSize}`,
+            fontWeight: `${ele.fontWeight}`,
+            textStyle: `${ele.textStyle}`,
+            textDecoration: `${ele.textDecoration === 'linethrough' ? 'line-through' : ele.textDecoration}`,
+            fontFamily: `${ele.fontFamily}`,
+            textAlign: `${ele.textAlign}`,
+            shadow: `${item2.myshadow}`
+          };
+        }
+      });
+      break;
+    case 'rect':
+      index = 2;
+      delete css.color;
+      css = {
+        ...css,
+        shadow: `${item2.myshadow}`
+      };
+      break;
+    case 'image':
+      index = 3;
+      delete css.color;
+      delete css.background;
+      css = {
+        url: item2.url,
+        ...css,
+        mode: `${item2.mode}`,
+        shadow: `${item2.myshadow}`
+      };
+      break;
+    case 'qrcode':
+      index = 4;
+      delete css.height;
+      delete css.borderWidth;
+      delete css.borderColor;
+      delete css.shadow;
+      css = {
+        url: item2.url,
+        ...css,
+        color: item2.color,
+        background: item2.background
+      };
+      break;
+    default:
+      break;
+  }
+  return {
+    index,
+    css
+  }
 }

@@ -507,7 +507,7 @@ export const addQrcodeObject = async css => {
  * 修改图形对象到值
  * @param {*} item2 
  */
-export const changeObjectValue = (item2, type) => {
+export const changeObjectValue = (item2) => {
   let width = `${(item2.width - item2.strokeWidth) * item2.scaleX}`;
   let height = `${(item2.height - item2.strokeWidth) * item2.scaleY}`;
   /* let left = `${(item2.left / item2.scaleY - (item2.width - item2.strokeWidth) / 2 - item2.strokeWidth).toFixed(2)}`;
@@ -529,7 +529,7 @@ export const changeObjectValue = (item2, type) => {
     shadow: `${item2.myshadow}`
   };
   let index = '';
-  switch (type) {
+  switch (item2.mytype) {
     case 'textGroup':
       index = 1;
       item2._objects.forEach(ele => {
@@ -613,4 +613,29 @@ export const changeObjectValue = (item2, type) => {
     index,
     css
   }
+}
+
+
+/**
+ * 添加元素
+ */
+export default async (type, css) => {
+  let Shape
+  switch (type) {
+    case 'text':
+      Shape = await addTextObject(css);
+      break;
+    case 'rect':
+      Shape = await addRectObject(css);
+      break;
+    case 'image':
+      Shape = await addImageObject(css);
+      break;
+    case 'qrcode':
+      Shape = await addQrcodeObject(css);
+      break;
+    default:
+      break;
+  }
+  return Shape
 }

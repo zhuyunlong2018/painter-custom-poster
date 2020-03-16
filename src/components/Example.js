@@ -1,14 +1,18 @@
 import React from 'react';
 import { Modal } from 'antd';
 import exampleData from '../example/index';
+import CanvasSprite from '../CanvasSprite'
+
+let canvasSprite
 
 /**
  * 海报例子、模板列表
  */
 export default class Example extends React.Component {
 
-  componentWillMount() {}
-
+  componentDidMount() {
+    canvasSprite = CanvasSprite.getInstances()
+  }
 
   render() {
     const { changeState, callable } = this.props
@@ -31,11 +35,12 @@ export default class Example extends React.Component {
                     okText: '确认',
                     cancelText: '取消',
                     onOk() {
-                      changeState(
-                        {
-                          importCodeJson: item.json
-                        }, callable
-                      )
+                      canvasSprite.importJsonCode(item.json, () => {})
+                      // changeState(
+                      //   {
+                      //     importCodeJson: item.json
+                      //   }, callable
+                      // )
                     },
                     onCancel() { }
                   });

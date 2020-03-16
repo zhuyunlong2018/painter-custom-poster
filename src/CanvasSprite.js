@@ -2,7 +2,11 @@ import {
   fabric
 } from 'fabric';
 import _ from 'lodash';
-import { newOptionArr } from './optionArr';
+import {
+  newOptionArr
+} from './optionArr';
+import AddShape, { changeObjectValue } from './AddShape'
+import { message } from 'antd';
 
 /**
  * canvas 实例，单例模式
@@ -18,7 +22,9 @@ export default class CanvasSprite {
       backgroundColor: this.currentOptionArr[0].css.background
     });
     this.views = []; //所有元素的信息
-    
+    this.importCodeJson = '' /* importCodeJson */;
+    this.activeObject = {}; //当前激活对象
+    this.observers = {}
   }
 
   /**
@@ -30,6 +36,20 @@ export default class CanvasSprite {
       this.instance = new CanvasSprite();
     }
     return this.instance;
+  }
+
+  /**
+   * 添加到观察者中
+   * @param {*} key 
+   * @param {*} observer 
+   */
+  attach(key, observer) {
+    this.observers[key] = observer
+  }
+
+
+  getActiveObject() {
+    return this.activeObject
   }
 
   /**
@@ -63,7 +83,6 @@ export default class CanvasSprite {
           obj.canvas.width - obj.getBoundingRect().width + obj.left - obj.getBoundingRect().left
         );
       }
-
       callback();
     });
   }
@@ -107,9 +126,15 @@ export default class CanvasSprite {
    * 监听鼠标点击
    * @param {Function} callback 回调
    */
-  onDown(callback) {
-    this.canvas_sprite.on('mouse:down', function (e) {
-      callback(e.target)
+  onDown() {
+    this.canvas_sprite.on('mouse:down', (e) => {
+      const target = e.target
+      if (target) {
+        this.activeObject = target
+        this.observers.app.changeActiveObjectValue()
+      } else {
+        this.observers.app.changeState({visible: false})
+      }
     });
   }
 
@@ -148,8 +173,57 @@ export default class CanvasSprite {
    * 监听键盘
    * @param {Function} callback 回调
    */
-  onKeydown(callback) {
-
+  onKeydown(event, callback) {
+    const activeObject = this.canvas_sprite.getActiveObject();
+    if (activeObject) {
+      if (event.which === 37) {
+        //左
+        this.activeObject.set({
+          left: this.activeObject.left - 1
+        });
+        this.observers.app.changeActiveObjectValue()
+      } else if (event.which === 39) {
+        //右
+        this.activeObject.set({
+          left: this.activeObject.left + 1
+        });
+        this.observers.app.changeActiveObjectValue()
+      } else if (event.which === 40) {
+        //上
+        this.activeObject.set({
+          top: this.activeObject.top + 1
+        });
+        this.observers.app.changeActiveObjectValue()
+      } else if (event.which === 38) {
+        //下
+        this.activeObject.set({
+          top: this.activeObject.top - 1
+        });
+      } else if (event.which === 221) {
+        //[ 层级降低
+        this.canvas_sprite.discardActiveObject();
+        this.activeObject.bringForward(true);
+        this.observers.app.changeActiveObjectValue()
+      } else if (event.which === 219) {
+        //] 层级提高
+        this.canvas_sprite.discardActiveObject();
+        this.activeObject.sendBackwards(true);
+        this.observers.app.changeActiveObjectValue()
+      } else if (event.which === 90 && event.ctrlKey) {
+        //ctrl+z
+        this.observers.app.handerUndo()
+        this.observers.app.changeActiveObjectValue()
+      } else if (event.which === 89 && event.ctrlKey) {
+        //ctrl+y
+        this.observers.app.handerRedo()
+        this.observers.app.changeActiveObjectValue()
+      } else if (event.which === 46 || event.which === 8) {
+        //delete backspace
+        this.observers.app.changeState({ visible: false })
+        this.canvas_sprite.remove(activeObject);
+      }
+      this.canvas_sprite.renderAll();
+    }
   }
 
   /**
@@ -157,6 +231,7 @@ export default class CanvasSprite {
    */
   getObjects(times) {
     this.views = [];
+
     function changeShadowTimes(shadow, times) {
       if (!shadow) return '';
       let arr = shadow.trim().split(/\s+/);
@@ -212,8 +287,7 @@ export default class CanvasSprite {
         };
       } else if (type === 'textGroup') {
         item2._objects.forEach(ele => {
-          if (ele.type === 'rect') {
-          } else {
+          if (ele.type === 'rect') {} else {
             view = {
               ...view,
               type: 'text',
@@ -254,13 +328,58 @@ export default class CanvasSprite {
       }
       this.views.push(view);
     });
-    
+
     return {
       width: `${this.canvas_sprite.width * times}px`,
       height: `${this.canvas_sprite.height * times}px`,
       background: this.canvas_sprite.backgroundColor,
       views: this.views
     };
+  }
+
+  /**
+   * 向画布添加元素
+   * @param {*} param0 
+   */
+  async addShape({type , css}) {
+    const Shape = await AddShape(type, css)
+    this.canvas_sprite.setActiveObject(Shape);
+    this.activeObject = Shape;
+    this.canvas_sprite.add(Shape);
+  }
+
+  importJsonCode (importCodeJson, callback) {
+    if (JSON.stringify(importCodeJson).indexOf('3.4.0') === -1) {
+      message.error(`请输入正确的json导出数据`, 2);
+      return;
+    }
+    if (typeof importCodeJson === 'string') {
+      importCodeJson = JSON.parse(importCodeJson);
+    }
+    console.log(importCodeJson)
+    //延时函数 解决setstate异步加载问题
+    const delay = ms =>
+    new Promise(resolve => {
+      clearTimeout(this.delayT);
+      this.delayT = setTimeout(resolve, ms);
+    });
+    this.canvas_sprite.setWidth(importCodeJson.canvas ? importCodeJson.canvas.width : '654'); //默认值
+    this.canvas_sprite.setHeight(importCodeJson.canvas ? importCodeJson.canvas.height : '1000'); //默认值
+    this.currentOptionArr[0].css['width'] = importCodeJson.canvas ? importCodeJson.canvas.width : '654';
+    this.currentOptionArr[0].css['height'] = importCodeJson.canvas ? importCodeJson.canvas.height : '1000';
+    this.currentOptionArr[0].css['background'] = importCodeJson.background;
+    this.canvas_sprite.loadFromJSON(importCodeJson, async () => {
+      let Objects = this.canvas_sprite.getObjects();
+      console.log(Objects)
+      for (let index = 0; index < Objects.length; index++) {
+        const element = Objects[index];
+        this.activeObject = element;
+        await delay(0);
+        await this.observers.app.updateObject();
+      }
+      message.success(`画面加载成功`, 2);
+      callback()
+    });
   }
 
 }

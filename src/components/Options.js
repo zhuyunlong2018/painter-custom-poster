@@ -4,9 +4,10 @@ import { optionArr } from '../optionArr';
 import { Button, Input, Select, Radio } from 'antd';
 import CanvasSprite from '../CanvasSprite'
 
+let canvasSprite
+
 const { Option } = Select;
 const { TextArea } = Input;
-
 /**
  * 添加、创建元素到表单配置
  */
@@ -18,15 +19,14 @@ export default class Options extends React.Component {
       currentObjectType: 'text', //当前要添加对象的类型
     }
   }
-  componentWillMount() {
+  componentDidMount() {
+    canvasSprite = CanvasSprite.getInstances()
   }
 
 
   render() {
     const { currentObjectType } = this.state;
-    const { 
-      currentOptionArr, 
-      addShape,
+    const {
       updateThisCurrentOptionArr,
       handleOptionsChange
     } = this.props
@@ -41,17 +41,19 @@ export default class Options extends React.Component {
                 //this.currentOptionArr = _.cloneDeep(newOptionArr);  //复原数据
               }}
             >
-              {optionArr.map((item, i) => {
-                return (
-                  <Radio.Button value={item.type} key={i}>
-                    {item.name}
-                  </Radio.Button>
-                );
-              })}
+              {
+                optionArr.map((item, i) => {
+                  return (
+                    <Radio.Button value={item.type} key={i}>
+                      {item.name}
+                    </Radio.Button>
+                  );
+                })
+              }
             </Radio.Group>
           </div>
         </div>
-        {currentOptionArr.map((item, i) => {
+        {canvasSprite && canvasSprite.currentOptionArr.map((item, i) => {
           if (item.type === currentObjectType) {
             return (
               <div key={i} className='option-li'>
@@ -59,7 +61,9 @@ export default class Options extends React.Component {
                   <div className='h3'>{item.name} </div>
                   {item.type !== 'canvas' && (
                     <div className='btn'>
-                      <Button type='primary' onClick={() => addShape(i)}>
+                      <Button type='primary' onClick={() => {
+                        canvasSprite.addShape(item)
+                      }}>
                         添加
                           </Button>
                     </div>

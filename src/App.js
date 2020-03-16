@@ -9,10 +9,9 @@ import Example from './components/Example'
 import CodeActions from './components/CodeActions'
 import Options from './components/Options'
 import Element from './components/Element'
-import { addTextObject, addRectObject, addImageObject, addQrcodeObject, changeObjectValue } from './AddShape'
+import { changeObjectValue } from './AddShape'
 //import importCodeJson from './importCodeJson';
 //var FontFaceObserver = require('fontfaceobserver');
-
 message.config({
   maxCount: 1
 });
@@ -42,11 +41,10 @@ class App extends React.Component {
     this.state = {
       redoButtonStatus: '',
       undoButtonStatus: '',
-      currentOptionArr: _.cloneDeep(newOptionArr), //当前可设置的数组的值
+      currentOptionArr: _.cloneDeep(newOptionArr), //当前设置的数组的值
       optionArr: _.cloneDeep(newOptionArr), //当前可设置的数组的值
       importCodeJson: ''
     };
-    this.currentOptionArr = _.cloneDeep(newOptionArr); //当前图像数据集合
     this.canvas_sprite = ''; //渲图片的canvas对象
     this.height = 300; //固定死
     this.width = 0; //通过实际宽高比计算出来的
@@ -56,15 +54,16 @@ class App extends React.Component {
 
   componentDidMount() {
     this.initCanvansSprite()
-
   }
 
   initCanvansSprite() {
+    
     //获取canvas实例
-    canvasSprite = CanvasSprite.getInstances({
-      ...this.state.currentOptionArr[0].css,
-      backgroundColor: this.state.currentOptionArr[0].css.background
-    })
+    canvasSprite = CanvasSprite.getInstances()
+
+    //添加到观察者中
+    canvasSprite.attach('app', this)
+
     //赋值
     this.canvas_sprite = canvasSprite.canvas_sprite
 
@@ -72,16 +71,7 @@ class App extends React.Component {
     //添加监听
     canvasSprite.onMoving(throttleChangeActiveObjectValue)
     canvasSprite.onScaling(throttleChangeActiveObjectValue)
-    canvasSprite.onDown((value) => {
-      if (value) {
-        this.activeObject = value
-        this.changeActiveObjectValue()
-      } else {
-        this.setState({
-          visible: false
-        });
-      }
-    })
+    canvasSprite.onDown()
     canvasSprite.onScaled(() => {
       this.updateCanvasState();
     })
@@ -90,106 +80,26 @@ class App extends React.Component {
     })
   }
 
+  /**
+   * 监听键盘
+   * @param {*} event 
+   */
   @keydown(/* ['ctrl+left', 'ctrl+right', 'ctrl+up', 'ctrl+down', 'ctrl+z', 'ctrl+y', 'delete', '[', ']'] */ ALL_KEYS)
   beginEdit(event) {
-    //console.log('event', event, event.which);
-    let that = this;
-    let activeObject = this.canvas_sprite.getActiveObject();
-    //console.log('activeObject', activeObject);
-    if (activeObject) {
-      //console.log('that.activeObject', that.activeObject);
-      if (event.which === 37) {
-        //左
-        event.preventDefault();
-        that.activeObject.set({
-          left: that.activeObject.left - 1
-        });
-        this.changeActiveObjectValue();
-      } else if (event.which === 39) {
-        //右
-        event.preventDefault();
-        that.activeObject.set({
-          left: that.activeObject.left + 1
-        });
-        this.changeActiveObjectValue();
-      } else if (event.which === 40) {
-        //上
-        event.preventDefault();
-        that.activeObject.set({
-          top: that.activeObject.top + 1
-        });
-        this.changeActiveObjectValue();
-      } else if (event.which === 38) {
-        //下
-        event.preventDefault();
-        that.activeObject.set({
-          top: that.activeObject.top - 1
-        });
-        this.changeActiveObjectValue();
-      } else if (event.which === 221) {
-        //[ 层级降低
-        event.preventDefault();
-        this.canvas_sprite.discardActiveObject();
-        that.activeObject.bringForward(true);
-        this.changeActiveObjectValue();
-      } else if (event.which === 219) {
-        //] 层级提高
-        event.preventDefault();
-        this.canvas_sprite.discardActiveObject();
-        that.activeObject.sendBackwards(true);
-        this.changeActiveObjectValue();
-      } else if (event.which === 90 && event.ctrlKey) {
-        //ctrl+z
-        that.handerUndo();
-        this.changeActiveObjectValue();
-      } else if (event.which === 89 && event.ctrlKey) {
-        //ctrl+y
-        that.handerRedo();
-        this.changeActiveObjectValue();
-      } else if (event.which === 46 || event.which === 8) {
-        //delete backspace
-        this.canvas_sprite.remove(activeObject);
-        that.setState({
-          visible: false
-        });
-      }
-      this.canvas_sprite.renderAll();
-    }
-    // Start editing
+    canvasSprite.onKeydown(event);
   }
 
   async addShape(index, action) {
-    let Shape;
     let currentOptionArr;
     if (action === 'update') {
       currentOptionArr = this.state.currentOptionArr;
     } else {
-      currentOptionArr = this.currentOptionArr;
+      currentOptionArr = canvasSprite.currentOptionArr;
     }
-    let { type } = currentOptionArr[index];
-    let { css } = currentOptionArr[index];
-    switch (type) {
-      case 'text':
-        Shape = await addTextObject(css);
-        break;
-      case 'rect':
-        Shape = await addRectObject(css);
-        break;
-      case 'image':
-        Shape = await addImageObject(css);
-        break;
-      case 'qrcode':
-        Shape = await addQrcodeObject(css);
-        break;
-      default:
-        break;
-    }
-    this.canvas_sprite.setActiveObject(Shape);
-    this.activeObject = Shape;
+    canvasSprite.addShape(currentOptionArr[index])
     this.setState({
       visible: true
     });
-    this.canvas_sprite.add(Shape);
     if (action !== 'update') {
       this.changeActiveObjectValue();
     }
@@ -218,12 +128,13 @@ class App extends React.Component {
   }
 
   changeActiveObjectValue() {
-    let type = this.activeObject.mytype;
+    const activeObject = canvasSprite.getActiveObject()
+    let type = activeObject.mytype;
     if (!type) return;
     this.setState({
       visible: true
     });
-    const { index , css } = changeObjectValue(this.activeObject, type)
+    const { index , css } = changeObjectValue(activeObject)
     let currentOptionArr = _.cloneDeep(this.state.currentOptionArr);
     currentOptionArr[index].css = css;
     this.setState({
@@ -249,20 +160,7 @@ class App extends React.Component {
     } else {
       importCodeJson = this.state.importCodeJson;
     }
-    this.canvas_sprite.setWidth(importCodeJson.canvas ? importCodeJson.canvas.width : '654'); //默认值
-    this.canvas_sprite.setHeight(importCodeJson.canvas ? importCodeJson.canvas.height : '1000'); //默认值
-    this.currentOptionArr[0].css['width'] = importCodeJson.canvas ? importCodeJson.canvas.width : '654';
-    this.currentOptionArr[0].css['height'] = importCodeJson.canvas ? importCodeJson.canvas.height : '1000';
-    this.currentOptionArr[0].css['background'] = importCodeJson.background;
-    canvas_sprite.loadFromJSON(this.state.importCodeJson, async () => {
-      let Objects = canvas_sprite.getObjects();
-      for (let index = 0; index < Objects.length; index++) {
-        const element = Objects[index];
-        this.activeObject = element;
-        this.changeActiveObjectValue();
-        await delay(0);
-        await this.updateObject();
-      }
+    canvasSprite.importCodeJson(importCodeJson, () => {
       this.setState({
         importCodeJson: ''
       });
@@ -270,7 +168,7 @@ class App extends React.Component {
       this.setState({
         visibleImportCode: false
       });
-    });
+    })
   }
 
   updateCanvasState() {
@@ -442,8 +340,6 @@ class App extends React.Component {
             confirmImportCode={this.confirmImportCode.bind(this)}
           />
           <Options
-            currentOptionArr={this.currentOptionArr}
-            addShape={this.addShape.bind(this)}
             updateThisCurrentOptionArr={this.updateThisCurrentOptionArr.bind(this)}
             handleOptionsChange={this.handleOptionsChange.bind(this)}
           />
@@ -458,7 +354,6 @@ class App extends React.Component {
         ></div>
         <Element currentOptionArr={currentOptionArr}
           visible={visible}
-          activeObject={this.activeObject}
           changeState={this.changeState.bind(this)}
           handleChangeElementValue={this.handleChangeElementValue.bind(this)}
         />

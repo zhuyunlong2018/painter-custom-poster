@@ -1,24 +1,28 @@
 import React from 'react';
 import _ from 'lodash';
 import { Input, Select, Drawer } from 'antd';
-
+import CanvasSprite from '../CanvasSprite'
 import { optionArr } from '../optionArr';
 
 const { Option } = Select;
 const { TextArea } = Input;
+
+
+let canvasSprite
 
 /**
  * 当前操作对象对应到表单数据
  */
 export default class Element extends React.Component {
 
-  componentWillMount() { }
+  componentDidMount() {
+    canvasSprite = CanvasSprite.getInstances()
+  }
 
   render() {
     const { 
       currentOptionArr,
       visible,
-      activeObject,
       changeState,
       handleChangeElementValue
     } = this.props
@@ -34,8 +38,8 @@ export default class Element extends React.Component {
         placement='right'
       >
         <div className='option option-drawer'>
-          {currentOptionArr.map((item, i) => {
-            let type = activeObject.mytype;
+          {canvasSprite && currentOptionArr.map((item, i) => {
+            let type = canvasSprite.activeObject.mytype;
             if (type === 'textGroup') {
               type = 'text';
             }

@@ -22,7 +22,7 @@ export default class CodeActions extends React.Component {
       importCodeJson: ''
     }
     this.views = []; //所有元素的信息
-    this.canvas_sprite = ''
+    this.canvas = ''
   }
 
   componentDidMount() {
@@ -61,11 +61,11 @@ export default class CodeActions extends React.Component {
   }
 
   exportCode() {
-    let canvas_sprite = canvasSprite.canvas_sprite;
-    var jsonData = canvas_sprite.toJSON();
+    let canvas = canvasSprite.canvas;
+    var jsonData = canvas.toJSON();
     jsonData.canvas = {
-      width: canvas_sprite.getWidth(),
-      height: canvas_sprite.getHeight()
+      width: canvas.getWidth(),
+      height: canvas.getHeight()
     };
     var canvasAsJson = JSON.stringify(jsonData);
     if (copy(/* 'export default' +  */ canvasAsJson)) {
@@ -81,55 +81,12 @@ export default class CodeActions extends React.Component {
     });
   }
 
-  confirmImportCode() {
-    if (JSON.stringify(this.state.importCodeJson).indexOf('3.4.0') === -1) {
-      message.error(`请输入正确的json导出数据`, 2);
-      return;
-    }
-    let canvas_sprite = canvasSprite.canvas_sprite;
-    //延时函数 解决setstate异步加载问题
-    const delay = ms =>
-      new Promise(resolve => {
-        clearTimeout(this.delayT);
-        this.delayT = setTimeout(resolve, ms);
-      });
-    let importCodeJson;
-    if (typeof this.state.importCodeJson === 'string') {
-      importCodeJson = JSON.parse(this.state.importCodeJson);
-    } else {
-      importCodeJson = this.state.importCodeJson;
-    }
-    canvas_sprite.setWidth(importCodeJson.canvas ? importCodeJson.canvas.width : '654'); //默认值
-    canvas_sprite.setHeight(importCodeJson.canvas ? importCodeJson.canvas.height : '1000'); //默认值
-    canvasSprite.currentOptionArr[0].css['width'] = importCodeJson.canvas ? importCodeJson.canvas.width : '654';
-    canvasSprite.currentOptionArr[0].css['height'] = importCodeJson.canvas ? importCodeJson.canvas.height : '1000';
-    canvasSprite.currentOptionArr[0].css['background'] = importCodeJson.background;
-    canvas_sprite.loadFromJSON(this.state.importCodeJson, async () => {
-      let Objects = canvas_sprite.getObjects();
-      for (let index = 0; index < Objects.length; index++) {
-        const element = Objects[index];
-        this.activeObject = element;
-        this.changeActiveObjectValue();
-        await delay(0);
-        await this.updateObject();
-      }
-      this.setState({
-        importCodeJson: ''
-      });
-      message.success(`画面加载成功`, 2);
-      this.setState({
-        visibleImportCode: false
-      });
-    });
-  }
-
   render() {
     const {
       visibleCode,
       visibleImportCode,
       importCodeJson
     } = this.state
-    const { confirmImportCode } = this.props
     return (
       <div className='box'>
         <div className='btns'>
@@ -183,7 +140,11 @@ export default class CodeActions extends React.Component {
             });
           }}
           footer={[
-            <Button key='submit' type='primary' onClick={() => confirmImportCode()}>
+            <Button key='submit' type='primary' onClick={() => {
+              canvasSprite.importJsonCode(importCodeJson, () => {
+                this.setState({ visibleImportCode: false })
+              })
+            }}>
               确定
             </Button>
           ]}
@@ -196,7 +157,6 @@ export default class CodeActions extends React.Component {
               this.setState({
                 importCodeJson: e.target.value
               });
-              //this.importCodeJson = e.target.value;
             }}
           />
         </Modal>

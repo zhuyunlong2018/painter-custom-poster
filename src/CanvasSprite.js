@@ -1,30 +1,45 @@
 import {
   fabric
-} from 'fabric';
-import _ from 'lodash';
+} from 'fabric'
 import {
   newOptionArr
-} from './optionArr';
-import AddShape, { changeObjectValue } from './AddShape'
-import { message } from 'antd';
+} from './optionArr'
+import _ from 'lodash'
+import AddShape from './AddShape'
+import {
+  message
+} from 'antd'
+
+
+let _config = {
+  canvasState: [],
+  currentStateIndex: -1,
+  undoStatus: false,
+  redoStatus: false,
+  undoFinishedStatus: 1,
+  redoFinishedStatus: 1
+};
 
 /**
  * canvas 实例，单例模式
  */
 export default class CanvasSprite {
 
+  /**
+   * 单例模型
+   */
   static instance = null
 
   constructor() {
     this.currentOptionArr = _.cloneDeep(newOptionArr); //当前图像数据集合
-    this.canvas_sprite = new fabric.Canvas('merge', {
+    this.canvas = new fabric.Canvas('merge', {
       ...this.currentOptionArr[0].css,
       backgroundColor: this.currentOptionArr[0].css.background
     });
     this.views = []; //所有元素的信息
     this.importCodeJson = '' /* importCodeJson */;
-    this.activeObject = {}; //当前激活对象
-    this.observers = {}
+    this.activeObject = null; //当前激活对象
+    this.observers = {} //观察者集合
   }
 
   /**
@@ -47,18 +62,22 @@ export default class CanvasSprite {
     this.observers[key] = observer
   }
 
-
-  getActiveObject() {
-    return this.activeObject
+  setActiveObject(object) {
+    if (typeof object === 'function') {
+      object()
+    } else {
+      this.activeObject = object
+    }
+    //此处通知观察者
+    this.observers.app.changeActiveObjectValue(this.activeObject)
   }
 
   /**
    * 监听移动
-   * @param {Function} callback 回调
    */
-  onMoving(callback) {
-    this.canvas_sprite.on('object:moving', function (e) {
-      var obj = e.target;
+  onMoving() {
+    const setActiveObject = _.throttle((e) => {
+      let obj = e.target;
       // if object is too big ignore
       if (obj.currentHeight > obj.canvas.height || obj.currentWidth > obj.canvas.width) {
         return;
@@ -83,16 +102,16 @@ export default class CanvasSprite {
           obj.canvas.width - obj.getBoundingRect().width + obj.left - obj.getBoundingRect().left
         );
       }
-      callback();
-    });
+      this.setActiveObject(obj)
+    }, 100);
+    this.canvas.on('object:moving', setActiveObject);
   }
 
   /**
    * 监听缩放
-   * @param {Function} callback 回调
    */
-  onScaling(callback) {
-    this.canvas_sprite.on('object:scaling', function (e) {
+  onScaling() {
+    const setActiveObject = _.throttle(e => {
       var obj = e.target;
       // if object is too big ignore
       if (obj.currentHeight > obj.canvas.height || obj.currentWidth > obj.canvas.width) {
@@ -118,55 +137,47 @@ export default class CanvasSprite {
           obj.canvas.width - obj.getBoundingRect().width + obj.left - obj.getBoundingRect().left
         );
       }
-      callback();
-    });
+      this.setActiveObject(obj)
+    })
+    this.canvas.on('object:scaling', setActiveObject);
   }
 
   /**
    * 监听鼠标点击
-   * @param {Function} callback 回调
    */
   onDown() {
-    this.canvas_sprite.on('mouse:down', (e) => {
+    this.canvas.on('mouse:down', (e) => {
       const target = e.target
-      if (target) {
-        this.activeObject = target
-        this.observers.app.changeActiveObjectValue()
-      } else {
-        this.observers.app.changeState({visible: false})
-      }
+      this.setActiveObject(target)
     });
   }
 
   /**
    * 监听缩放完毕
-   * @param {Function} callback 回调
    */
-  onScaled(callback) {
+  onScaled() {
     //解决放大缩小元素位置不对的问题
-    this.canvas_sprite.on('object:scaled', function (e) {
-      callback(e.target)
+    this.canvas.on('object:scaled', () => {
+      this.updateCanvasState()
     });
   }
 
   /**
    * 监听修改完毕
-   * @param {Function} callback 回调
    */
-  onModified(callback) {
-    this.canvas_sprite.on('object:modified', function () {
-      callback()
+  onModified() {
+    this.canvas.on('object:modified', () => {
+      this.updateCanvasState()
     });
   }
 
   /**
    * 监听添加完毕
-   * @param {Function} callback 回调
    */
-  onAdded(callback) {
-    this.canvas_sprite.on('object:added', function () {
-      callback();
-    });
+  onAdded() {
+    this.canvas.on('object:added', () => {
+      this.updateCanvasState();
+    })
   }
 
   /**
@@ -174,55 +185,61 @@ export default class CanvasSprite {
    * @param {Function} callback 回调
    */
   onKeydown(event, callback) {
-    const activeObject = this.canvas_sprite.getActiveObject();
+    const activeObject = this.activeObject;
     if (activeObject) {
       if (event.which === 37) {
         //左
-        this.activeObject.set({
-          left: this.activeObject.left - 1
-        });
-        this.observers.app.changeActiveObjectValue()
+        this.setActiveObject(() => {
+          this.activeObject.set({
+            left: this.activeObject.left - 1
+          });
+        })
       } else if (event.which === 39) {
         //右
-        this.activeObject.set({
-          left: this.activeObject.left + 1
-        });
-        this.observers.app.changeActiveObjectValue()
+        this.setActiveObject(() => {
+          this.activeObject.set({
+            left: this.activeObject.left + 1
+          });
+        })
       } else if (event.which === 40) {
         //上
-        this.activeObject.set({
-          top: this.activeObject.top + 1
-        });
-        this.observers.app.changeActiveObjectValue()
+        this.setActiveObject(() => {
+          this.activeObject.set({
+            top: this.activeObject.top + 1
+          });
+        })
       } else if (event.which === 38) {
         //下
-        this.activeObject.set({
-          top: this.activeObject.top - 1
-        });
+        this.setActiveObject(() => {
+          this.activeObject.set({
+            top: this.activeObject.top - 1
+          });
+        })
       } else if (event.which === 221) {
         //[ 层级降低
-        this.canvas_sprite.discardActiveObject();
-        this.activeObject.bringForward(true);
-        this.observers.app.changeActiveObjectValue()
+        this.setActiveObject(() => {
+          this.canvas.discardActiveObject();
+          this.activeObject.bringForward(true);
+        })
       } else if (event.which === 219) {
         //] 层级提高
-        this.canvas_sprite.discardActiveObject();
-        this.activeObject.sendBackwards(true);
-        this.observers.app.changeActiveObjectValue()
-      } else if (event.which === 90 && event.ctrlKey) {
-        //ctrl+z
-        this.observers.app.handerUndo()
-        this.observers.app.changeActiveObjectValue()
-      } else if (event.which === 89 && event.ctrlKey) {
-        //ctrl+y
-        this.observers.app.handerRedo()
-        this.observers.app.changeActiveObjectValue()
+        this.setActiveObject(() => {
+          this.canvas.discardActiveObject();
+          this.activeObject.sendBackwards(true);
+        })
       } else if (event.which === 46 || event.which === 8) {
         //delete backspace
-        this.observers.app.changeState({ visible: false })
-        this.canvas_sprite.remove(activeObject);
+        this.canvas.remove(activeObject);
+        this.setActiveObject(null)
       }
-      this.canvas_sprite.renderAll();
+      this.canvas.renderAll();
+    }
+    if (event.which === 90 && event.ctrlKey) {
+      //ctrl+z
+      this.handerUndo()
+    } else if (event.which === 89 && event.ctrlKey) {
+      //ctrl+y
+      this.handerRedo()
     }
   }
 
@@ -237,7 +254,7 @@ export default class CanvasSprite {
       let arr = shadow.trim().split(/\s+/);
       return `${arr[0] * times} ${arr[1] * times} ${arr[2] * times} ${arr[3]}`;
     }
-    this.canvas_sprite.getObjects().forEach((item2, index) => {
+    this.canvas.getObjects().forEach((item2, index) => {
       let view = {};
       let width = item2.width * item2.scaleX * times;
       let height = item2.height * item2.scaleY * times;
@@ -287,7 +304,7 @@ export default class CanvasSprite {
         };
       } else if (type === 'textGroup') {
         item2._objects.forEach(ele => {
-          if (ele.type === 'rect') {} else {
+          if (ele.type === 'rect') { } else {
             view = {
               ...view,
               type: 'text',
@@ -330,9 +347,9 @@ export default class CanvasSprite {
     });
 
     return {
-      width: `${this.canvas_sprite.width * times}px`,
-      height: `${this.canvas_sprite.height * times}px`,
-      background: this.canvas_sprite.backgroundColor,
+      width: `${this.canvas.width * times}px`,
+      height: `${this.canvas.height * times}px`,
+      background: this.canvas.backgroundColor,
       views: this.views
     };
   }
@@ -341,14 +358,33 @@ export default class CanvasSprite {
    * 向画布添加元素
    * @param {*} param0 
    */
-  async addShape({type , css}) {
+  async addShape({
+    type,
+    css
+  }) {
     const Shape = await AddShape(type, css)
-    this.canvas_sprite.setActiveObject(Shape);
+    this.canvas.setActiveObject(Shape);
     this.activeObject = Shape;
-    this.canvas_sprite.add(Shape);
+    this.canvas.add(Shape);
   }
 
-  importJsonCode (importCodeJson, callback) {
+  /**
+   * 更新画布中到元素
+   * @param {*} param0 
+   */
+  async updateShape({
+    type,
+    css
+  }) {
+    this.canvas.remove(this.activeObject);
+    this.addShape({
+      type,
+      css
+    })
+    this.canvas.renderAll();
+  }
+
+  importJsonCode(importCodeJson, callback) {
     if (JSON.stringify(importCodeJson).indexOf('3.4.0') === -1) {
       message.error(`请输入正确的json导出数据`, 2);
       return;
@@ -356,30 +392,124 @@ export default class CanvasSprite {
     if (typeof importCodeJson === 'string') {
       importCodeJson = JSON.parse(importCodeJson);
     }
-    console.log(importCodeJson)
     //延时函数 解决setstate异步加载问题
     const delay = ms =>
-    new Promise(resolve => {
-      clearTimeout(this.delayT);
-      this.delayT = setTimeout(resolve, ms);
-    });
-    this.canvas_sprite.setWidth(importCodeJson.canvas ? importCodeJson.canvas.width : '654'); //默认值
-    this.canvas_sprite.setHeight(importCodeJson.canvas ? importCodeJson.canvas.height : '1000'); //默认值
+      new Promise(resolve => {
+        clearTimeout(this.delayT);
+        this.delayT = setTimeout(resolve, ms);
+      });
+    this.canvas.setWidth(importCodeJson.canvas ? importCodeJson.canvas.width : '654'); //默认值
+    this.canvas.setHeight(importCodeJson.canvas ? importCodeJson.canvas.height : '1000'); //默认值
     this.currentOptionArr[0].css['width'] = importCodeJson.canvas ? importCodeJson.canvas.width : '654';
     this.currentOptionArr[0].css['height'] = importCodeJson.canvas ? importCodeJson.canvas.height : '1000';
     this.currentOptionArr[0].css['background'] = importCodeJson.background;
-    this.canvas_sprite.loadFromJSON(importCodeJson, async () => {
-      let Objects = this.canvas_sprite.getObjects();
-      console.log(Objects)
+    this.canvas.loadFromJSON(importCodeJson, async () => {
+      let Objects = this.canvas.getObjects();
       for (let index = 0; index < Objects.length; index++) {
         const element = Objects[index];
         this.activeObject = element;
         await delay(0);
-        await this.observers.app.updateObject();
       }
       message.success(`画面加载成功`, 2);
-      callback()
+      callback && callback()
     });
+  }
+
+  /**
+   * 更新canvas存储到步骤状态信息
+   */
+  updateCanvasState() {
+    if (_config.undoStatus === false && _config.redoStatus === false) {
+      const jsonData = this.canvas.toJSON();
+      const canvasAsJson = JSON.stringify(jsonData);
+      if (_config.currentStateIndex < _config.canvasState.length - 1) {
+        const indexToBeInserted = _config.currentStateIndex + 1;
+        _config.canvasState[indexToBeInserted] = canvasAsJson;
+        const numberOfElementsToRetain = indexToBeInserted + 1;
+        _config.canvasState = _config.canvasState.splice(0, numberOfElementsToRetain);
+      } else {
+        _config.canvasState.push(canvasAsJson);
+      }
+      _config.currentStateIndex = _config.canvasState.length - 1;
+      if (_config.currentStateIndex === _config.canvasState.length - 1 && _config.currentStateIndex !== -1) {
+        //todo success handle
+      }
+    }
+  }
+
+  /**
+   * 后退一步
+   */
+  handerUndo() {
+    console.log(_config)
+    if (_config.undoFinishedStatus) {
+      if (_config.currentStateIndex === -1) {
+        _config.undoStatus = false;
+      } else {
+        if (_config.canvasState.length >= 1) {
+          _config.undoFinishedStatus = 0;
+          if (_config.currentStateIndex !== 0) {
+            _config.undoStatus = true;
+            this.canvas.loadFromJSON(_config.canvasState[_config.currentStateIndex - 1], async () => {
+              const Objects = this.canvas.getObjects();
+              for (let index = 0; index < Objects.length; index++) {
+                const element = Objects[index];
+                this.activeObject = element;
+                //todo 更新画布，app的currentOtions
+              }
+              this.canvas.renderAll();
+              _config.undoStatus = false;
+              _config.currentStateIndex -= 1;
+              //todo 
+              if (_config.currentStateIndex !== _config.canvasState.length - 1) {
+                //todo 
+              }
+              _config.undoFinishedStatus = 1;
+            });
+          } else if (_config.currentStateIndex === 0) {
+            this.canvas.clear();
+            _config.undoFinishedStatus = 1;
+            //todo state
+            _config.currentStateIndex -= 1;
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * 前进一步
+   */
+  handerRedo() {
+    if (_config.redoFinishedStatus) {
+      if (_config.currentStateIndex === _config.canvasState.length - 1 && _config.currentStateIndex !== -1) {
+        //state
+      } else {
+        if (_config.canvasState.length > _config.currentStateIndex && _config.canvasState.length !== 0) {
+          _config.redoFinishedStatus = 0;
+          _config.redoStatus = true;
+          this.canvas.loadFromJSON(_config.canvasState[_config.currentStateIndex + 1], async () => {
+            const Objects = this.canvas.getObjects();
+            for (let index = 0; index < Objects.length; index++) {
+              const element = Objects[index];
+              this.activeObject = element;
+              //update canvas and state
+            }
+
+            this.canvas.renderAll();
+            _config.redoStatus = false;
+            _config.currentStateIndex += 1;
+            if (_config.currentStateIndex !== -1) {
+              //state
+            }
+            _config.redoFinishedStatus = 1;
+            if (_config.currentStateIndex === _config.canvasState.length - 1 && _config.currentStateIndex !== -1) {
+              //state
+            }
+          });
+        }
+      }
+    }
   }
 
 }

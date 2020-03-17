@@ -147,7 +147,7 @@ export const addTextObject = async css => {
     shadow,
     selectable: false
   });
-  //this.canvas_sprite.add(Rect);
+  //this.canvas.add(Rect);
   let gradientOption = '';
   if (GD.api.isGradient(background)) {
     gradientOption = GD.api.doGradient(background, width, height);

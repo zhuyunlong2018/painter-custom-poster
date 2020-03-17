@@ -19,12 +19,19 @@ export default class Element extends React.Component {
     canvasSprite = CanvasSprite.getInstances()
   }
 
+  changeValue(index, item, value) {
+    let currentOptionArr = _.cloneDeep(this.props.currentOptionArr);
+    currentOptionArr[index].css[item] = value;
+    this.props.changeState({ currentOptionArr }, () => {
+      canvasSprite.updateShape(currentOptionArr[index])
+    })
+  }
+
   render() {
     const { 
       currentOptionArr,
       visible,
       changeState,
-      handleChangeElementValue
     } = this.props
     return (
       <Drawer
@@ -38,7 +45,7 @@ export default class Element extends React.Component {
         placement='right'
       >
         <div className='option option-drawer'>
-          {canvasSprite && currentOptionArr.map((item, i) => {
+          {canvasSprite && canvasSprite.activeObject && currentOptionArr.map((item, i) => {
             let type = canvasSprite.activeObject.mytype;
             if (type === 'textGroup') {
               type = 'text';
@@ -58,7 +65,7 @@ export default class Element extends React.Component {
                             defaultValue={item.css[item2]}
                             value={item.css[item2]}
                             onChange={event => {
-                              handleChangeElementValue(i, item2, event.target.value)
+                              this.changeValue(i, item2, event.target.value)
                             }}
                           />
                         )}
@@ -66,7 +73,7 @@ export default class Element extends React.Component {
                           <TextArea
                             value={item.css[item2]}
                             onChange={event => {
-                              handleChangeElementValue(i, item2, event.target.value)
+                              this.changeValue(i, item2, event.target.value)
                             }}
                           />
                         )}
@@ -76,7 +83,7 @@ export default class Element extends React.Component {
                             value={item.css[item2]}
                             style={{ width: 120 }}
                             onChange={value => {
-                              handleChangeElementValue(i, item2, value)
+                              this.changeValue(i, item2, value)
                             }}
                           >
                             {optionArr[i].css[item2].map((item3, i3) => {

@@ -23,13 +23,25 @@ export default class Options extends React.Component {
     canvasSprite = CanvasSprite.getInstances()
   }
 
+  handleOptionsChange(item, value) {
+    if (item === 'width') {
+      canvasSprite.canvas.setWidth(value);
+    } else if (item === 'height') {
+      canvasSprite.canvas.setHeight(value);
+    } else if (item === 'backgroundColor') {
+      canvasSprite.canvas.setBackgroundColor(value);
+      canvasSprite.canvas.renderAll();
+    } else if (item === 'times') {
+      // this.currentOptionArr[i].css[item2] = event.target.value;
+    }
+  }
+
+  changeValue(index, item, value) {
+    canvasSprite.currentOptionArr[index].css[item] = value
+  }
 
   render() {
     const { currentObjectType } = this.state;
-    const {
-      updateThisCurrentOptionArr,
-      handleOptionsChange
-    } = this.props
     return (
       <div className='option'>
         <div className='box'>
@@ -78,9 +90,9 @@ export default class Options extends React.Component {
                           defaultValue={item.css[item2]}
                           //value={item.css[item2]}
                           onChange={event => {
-                            updateThisCurrentOptionArr(i, item2, event.target.value)
+                            this.changeValue(i, item2, event.target.value)
                             if (item.type === 'canvas') {
-                              handleOptionsChange(item2, event.target.value)
+                              this.handleOptionsChange(item2, event.target.value)
                             }
                           }}
                         />
@@ -89,9 +101,9 @@ export default class Options extends React.Component {
                         <TextArea
                           defaultValue={item.css[item2]}
                           onChange={event => {
-                            updateThisCurrentOptionArr(i, item2, event.target.value)
+                            this.changeValue(i, item2, event.target.value)
                             if (item.type === 'canvas') {
-                              handleOptionsChange(item2, event.target.value)
+                              this.handleOptionsChange(item2, event.target.value)
                             }
                           }}
                         />
@@ -101,7 +113,7 @@ export default class Options extends React.Component {
                           defaultValue={item.css[item2][0]}
                           style={{ width: 120 }}
                           onChange={value => {
-                            updateThisCurrentOptionArr(i, item2, value)
+                            this.changeValue(i, item2, value)
                           }}
                         >
                           {item.css[item2].map((item3, i3) => {

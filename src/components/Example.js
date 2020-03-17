@@ -15,7 +15,6 @@ export default class Example extends React.Component {
   }
 
   render() {
-    const { changeState, callable } = this.props
     return (
       <div className='example'>
         <div className='example-header'>
@@ -35,12 +34,7 @@ export default class Example extends React.Component {
                     okText: '确认',
                     cancelText: '取消',
                     onOk() {
-                      canvasSprite.importJsonCode(item.json, () => {})
-                      // changeState(
-                      //   {
-                      //     importCodeJson: item.json
-                      //   }, callable
-                      // )
+                      canvasSprite.importJsonCode(item.json)
                     },
                     onCancel() { }
                   });

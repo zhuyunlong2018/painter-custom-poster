@@ -14,8 +14,8 @@ import {
 let _config = {
   canvasState: [],
   currentStateIndex: -1,
-  undoStatus: false,
-  redoStatus: false,
+  undoStatus: false,//撤销状态
+  redoStatus: false,// 重做状态
   undoFinishedStatus: 1,
   redoFinishedStatus: 1
 };
@@ -167,6 +167,7 @@ export default class CanvasSprite {
    */
   onModified() {
     this.canvas.on('object:modified', () => {
+      console.log('modified')
       this.updateCanvasState()
     });
   }
@@ -175,16 +176,16 @@ export default class CanvasSprite {
    * 监听添加完毕
    */
   onAdded() {
-    this.canvas.on('object:added', () => {
-      this.updateCanvasState();
+    this.canvas.on('object:added', e => {
+      console.log('added')
+      this.setActiveObject(e.target)
     })
   }
 
   /**
    * 监听键盘
-   * @param {Function} callback 回调
    */
-  onKeydown(event, callback) {
+  onKeydown(event) {
     const activeObject = this.activeObject;
     if (activeObject) {
       if (event.which === 37) {
@@ -364,8 +365,9 @@ export default class CanvasSprite {
   }) {
     const Shape = await AddShape(type, css)
     this.canvas.setActiveObject(Shape);
-    this.activeObject = Shape;
     this.canvas.add(Shape);
+    //只有手动添加元素才进行更新历史记录，防止操作历史记录时冲突
+    this.updateCanvasState();
   }
 
   /**
@@ -385,10 +387,10 @@ export default class CanvasSprite {
   }
 
   importJsonCode(importCodeJson, callback) {
-    if (JSON.stringify(importCodeJson).indexOf('3.4.0') === -1) {
-      message.error(`请输入正确的json导出数据`, 2);
-      return;
-    }
+    // if (JSON.stringify(importCodeJson).indexOf('3.4.0') === -1) {
+    //   message.error(`请输入正确的json导出数据`, 2);
+    //   return;
+    // }
     if (typeof importCodeJson === 'string') {
       importCodeJson = JSON.parse(importCodeJson);
     }
@@ -406,8 +408,7 @@ export default class CanvasSprite {
     this.canvas.loadFromJSON(importCodeJson, async () => {
       let Objects = this.canvas.getObjects();
       for (let index = 0; index < Objects.length; index++) {
-        const element = Objects[index];
-        this.activeObject = element;
+        this.setActiveObject({ ...Objects[index] })
         await delay(0);
       }
       message.success(`画面加载成功`, 2);
@@ -419,20 +420,27 @@ export default class CanvasSprite {
    * 更新canvas存储到步骤状态信息
    */
   updateCanvasState() {
+    if (!this.activeObject) {
+      return
+    }
+    //todo 限制步骤，防止内存占用过量
     if (_config.undoStatus === false && _config.redoStatus === false) {
-      const jsonData = this.canvas.toJSON();
-      const canvasAsJson = JSON.stringify(jsonData);
+      //此处应该重构，存储步骤改为单独元素，而不是整个画布
+      const shape = this.activeObject.toJSON()
+      shape.id = this.activeObject.id
+      const shapeAsJson = JSON.stringify(shape);
       if (_config.currentStateIndex < _config.canvasState.length - 1) {
         const indexToBeInserted = _config.currentStateIndex + 1;
-        _config.canvasState[indexToBeInserted] = canvasAsJson;
+        _config.canvasState[indexToBeInserted] = shapeAsJson;
         const numberOfElementsToRetain = indexToBeInserted + 1;
         _config.canvasState = _config.canvasState.splice(0, numberOfElementsToRetain);
       } else {
-        _config.canvasState.push(canvasAsJson);
+        _config.canvasState.push(shapeAsJson);
       }
       _config.currentStateIndex = _config.canvasState.length - 1;
       if (_config.currentStateIndex === _config.canvasState.length - 1 && _config.currentStateIndex !== -1) {
         //todo success handle
+        console.log('update', _config)
       }
     }
   }
@@ -441,7 +449,6 @@ export default class CanvasSprite {
    * 后退一步
    */
   handerUndo() {
-    console.log(_config)
     if (_config.undoFinishedStatus) {
       if (_config.currentStateIndex === -1) {
         _config.undoStatus = false;
@@ -450,22 +457,45 @@ export default class CanvasSprite {
           _config.undoFinishedStatus = 0;
           if (_config.currentStateIndex !== 0) {
             _config.undoStatus = true;
-            this.canvas.loadFromJSON(_config.canvasState[_config.currentStateIndex - 1], async () => {
-              const Objects = this.canvas.getObjects();
-              for (let index = 0; index < Objects.length; index++) {
-                const element = Objects[index];
-                this.activeObject = element;
-                //todo 更新画布，app的currentOtions
+            //todo 此处后退操作，需要防止继续被记录
+            //后退操作，删除画布上前几步到图形，然后直接取第几步骤的图形导入
+            //TODO 需要考虑撤回到是删除步骤
+            const objects = this.canvas.getObjects()
+            //保存的最后一个状态
+            const lastShape = JSON.parse(_config.canvasState[_config.currentStateIndex])
+            //倒数第二个状态
+            const nextShape = JSON.parse(_config.canvasState[_config.currentStateIndex - 1])
+            outter:
+            for (let i = 0; i < _config.currentStateIndex; i++) {
+              for (let j = 0; j < objects.length; j++) {
+                if (lastShape.id === objects[j].id) {
+                  //移除最后一个元素
+                  this.canvas.remove(objects[j]);
+                  break outter
+                }
               }
-              this.canvas.renderAll();
-              _config.undoStatus = false;
-              _config.currentStateIndex -= 1;
+            }
+            if (lastShape.id === nextShape.id) {
+              //如果相邻两个元素ID相等，说明是修改，则要向画布添加倒数第二元素
+              fabric.util.enlivenObjects([nextShape], objects => {
+                const origRenderOnAddRemove = this.canvas.renderOnAddRemove
+                this.canvas.renderOnAddRemove = false
+                objects.forEach(shape => {
+                  this.canvas.add(shape);
+                });
+                this.canvas.renderOnAddRemove = origRenderOnAddRemove;
+                this.canvas.renderAll();
+              });
+            }
+
+            _config.undoStatus = false;
+            _config.currentStateIndex -= 1;
+            console.log('currentStateIndex', _config.currentStateIndex)
+            //todo 
+            if (_config.currentStateIndex !== _config.canvasState.length - 1) {
               //todo 
-              if (_config.currentStateIndex !== _config.canvasState.length - 1) {
-                //todo 
-              }
-              _config.undoFinishedStatus = 1;
-            });
+            }
+            _config.undoFinishedStatus = 1;
           } else if (_config.currentStateIndex === 0) {
             this.canvas.clear();
             _config.undoFinishedStatus = 1;
@@ -485,31 +515,57 @@ export default class CanvasSprite {
       if (_config.currentStateIndex === _config.canvasState.length - 1 && _config.currentStateIndex !== -1) {
         //state
       } else {
+        console.log('currentStateIndex', _config.currentStateIndex)
         if (_config.canvasState.length > _config.currentStateIndex && _config.canvasState.length !== 0) {
           _config.redoFinishedStatus = 0;
           _config.redoStatus = true;
-          this.canvas.loadFromJSON(_config.canvasState[_config.currentStateIndex + 1], async () => {
-            const Objects = this.canvas.getObjects();
-            for (let index = 0; index < Objects.length; index++) {
-              const element = Objects[index];
-              this.activeObject = element;
-              //update canvas and state
-            }
+          //TODO 需要考虑撤回到是删除步骤
 
+          //前进一步时，之前保留的元素
+          const nextShape = JSON.parse(_config.canvasState[_config.currentStateIndex + 1])
+
+          if (_config.currentStateIndex !== -1) {
+            //已经撤销到清空画布到情况，直接将第一个元装载在进去
+            const objects = this.canvas.getObjects()
+            //当前画布上停留到最后一个元素
+            const currentShape = JSON.parse(_config.canvasState[_config.currentStateIndex])
+
+            if (currentShape.id === nextShape.id) {
+              //ID相同，说明上一步是修改步骤，
+              outter:
+              for (let i = 0; i < _config.currentStateIndex; i++) {
+                for (let j = 0; j < objects.length; j++) {
+                  if (currentShape.id === objects[j].id) {
+                    //移除当前一个元素
+                    this.canvas.remove(objects[j]);
+                    break outter
+                  }
+                }
+              }
+            }
+          }
+          //将上一个步骤元素添加进去
+          fabric.util.enlivenObjects([nextShape], objects => {
+            const origRenderOnAddRemove = this.canvas.renderOnAddRemove
+            this.canvas.renderOnAddRemove = false
+            objects.forEach(shape => {
+              this.canvas.add(shape);
+              this.setActiveObject(shape)
+            });
+            this.canvas.renderOnAddRemove = origRenderOnAddRemove;
             this.canvas.renderAll();
-            _config.redoStatus = false;
-            _config.currentStateIndex += 1;
-            if (_config.currentStateIndex !== -1) {
-              //state
-            }
-            _config.redoFinishedStatus = 1;
-            if (_config.currentStateIndex === _config.canvasState.length - 1 && _config.currentStateIndex !== -1) {
-              //state
-            }
           });
+          _config.redoStatus = false;
+          _config.currentStateIndex += 1;
+          if (_config.currentStateIndex !== -1) {
+            //state
+          }
+          _config.redoFinishedStatus = 1;
+          if (_config.currentStateIndex === _config.canvasState.length - 1 && _config.currentStateIndex !== -1) {
+            //state
+          }
         }
       }
     }
   }
-
 }

@@ -1,6 +1,7 @@
 import {
   fabric
 } from 'fabric';
+import _ from 'lodash';
 import jrQrcode from 'jr-qrcode';
 
 const GD = require('./gradient.js');
@@ -620,7 +621,7 @@ export const changeObjectValue = (item2) => {
  * 添加元素
  */
 export default async (type, css) => {
-  let Shape
+  let Shape = {}
   switch (type) {
     case 'text':
       Shape = await addTextObject(css);
@@ -637,5 +638,7 @@ export default async (type, css) => {
     default:
       break;
   }
+  //添加唯一ID标识符
+  Shape.id = _.uniqueId("shape_")
   return Shape
 }
